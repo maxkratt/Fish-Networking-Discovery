@@ -4,12 +4,17 @@ using UnityEngine;
 
 namespace FishNet.Discovery
 {
+	public struct DiscoveredGameServer
+	{
+		public IPEndPoint IPEndPoint;
+		public string ServerName;
+	}
 	public sealed class NetworkDiscoveryHUD : MonoBehaviour
 	{
 		[SerializeField]
 		private NetworkDiscovery networkDiscovery;
 
-		private readonly List<IPEndPoint> _endPoints = new List<IPEndPoint>();
+		private readonly List<DiscoveredGameServer> _foundServers = new List<DiscoveredGameServer>();
 
 		private Vector2 _serversListScrollVector;
 
@@ -17,9 +22,20 @@ namespace FishNet.Discovery
 		{
 			if (networkDiscovery == null) networkDiscovery = FindObjectOfType<NetworkDiscovery>();
 
-			networkDiscovery.ServerFoundCallback += (endPoint) =>
+			networkDiscovery.ServerFoundCallback += (endPoint, foundServerName) =>
 			{
-				if (!_endPoints.Contains(endPoint)) _endPoints.Add(endPoint);
+				DiscoveredGameServer newServer = new DiscoveredGameServer() 
+				{ 
+					IPEndPoint = endPoint, 
+					ServerName = foundServerName
+				};
+				
+				int index = _foundServers.FindIndex(server => server.IPEndPoint.Equals(newServer.IPEndPoint));
+
+				if (index != -1)
+					_foundServers[index] = newServer;
+				else
+					_foundServers.Add(newServer);
 			};
 		}
 
@@ -66,17 +82,19 @@ namespace FishNet.Discovery
 					}
 				}
 
-				if (_endPoints.Count > 0)
+				if (_foundServers.Count > 0)
 				{
 					GUILayout.Box("Servers");
 
 					using (new GUILayout.ScrollViewScope(_serversListScrollVector))
 					{
-						for (int i = 0; i < _endPoints.Count; i++)
+						for (int i = 0; i < _foundServers.Count; i++)
 						{
-							string ipAddress = _endPoints[i].Address.ToString();
-
-							if (GUILayout.Button(ipAddress))
+							string ipAddress = _foundServers[i].IPEndPoint.Address.ToString();
+							string serverName = _foundServers[i].ServerName.Trim();
+							string buttonName = (serverName == "") ? ipAddress : serverName;
+							
+							if (GUILayout.Button(buttonName))
 							{
 								networkDiscovery.StopAdvertisingServer();
 

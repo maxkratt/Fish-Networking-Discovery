@@ -16,6 +16,12 @@ namespace FishNet.Discovery
 	public sealed class NetworkDiscovery : MonoBehaviour
 	{
 		/// <summary>
+		/// The name of the server to be displayed in LAN discovery.
+		/// </summary>
+		[Tooltip("The name of the server to be displayed in LAN discovery. Semicolons will be stripped from the name.")]
+		public string ServerName;
+
+		/// <summary>
 		/// A string that differentiates your application/game from others.
 		/// <b>Must not</b> be null, empty, or blank.
 		/// </summary>
@@ -68,7 +74,7 @@ namespace FishNet.Discovery
 		/// <summary>
 		/// An <see cref="Action"/> that is invoked by this <seealso cref="NetworkDiscovery"/> component whenever a server is found.
 		/// </summary>
-		public event Action<IPEndPoint> ServerFoundCallback;
+		public event Action<IPEndPoint, string> ServerFoundCallback;
 
 		private void Start()
 		{
@@ -216,9 +222,10 @@ namespace FishNet.Discovery
 
 				if (receivedSecret == secret)
 				{
-					byte[] okBytes = BitConverter.GetBytes(true);
-
-					await _serverUdpClient.SendAsync(okBytes, okBytes.Length, result.RemoteEndPoint);
+					// Combine the server name and secret and send it back to the client.
+					string serverInfo = $"{ServerName.Replace(";", "")};{secret}";
+					byte[] serverInfoBytes = Encoding.UTF8.GetBytes(serverInfo);
+					await _serverUdpClient.SendAsync(serverInfoBytes, serverInfoBytes.Length, result.RemoteEndPoint);
 				}
 			}
 		}
@@ -292,9 +299,13 @@ namespace FishNet.Discovery
 
 				UdpReceiveResult result = await _clientUdpClient.ReceiveAsync();
 
-				if (BitConverter.ToBoolean(result.Buffer, 0))
+				string receivedServerInfo = Encoding.UTF8.GetString(result.Buffer);
+				string[] infoParts = receivedServerInfo.Split(';');
+
+				if (infoParts.Length == 2 && infoParts[1] == secret)
 				{
-					ServerFoundCallback?.Invoke(result.RemoteEndPoint);
+					string foundServerName = infoParts[0];
+					ServerFoundCallback?.Invoke(result.RemoteEndPoint, foundServerName);
 
 					StopSearchingForServers();
 				}
